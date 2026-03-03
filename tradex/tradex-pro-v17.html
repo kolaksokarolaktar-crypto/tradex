@@ -1086,95 +1086,55 @@ async function fetchFinnhubAll(){
 
 // ═══════════════════ METALS.DEV — Altın, Gümüş, Platin (Ücretsiz, key yok) ═══════════════════
 async function fetchMetals(){
-  const yahooMap = {
-    XAUUSD:'GC=F', XAGUSD:'SI=F', USOIL:'BZ=F', NATGAS:'NG=F',
-    COPPER:'HG=F', PLAT:'PL=F', WHEAT:'ZW=F', CORN:'ZC=F',
-    SP500:'^GSPC', NDX:'^NDX', DJIA:'^DJI', DAX:'^GDAXI', FTSE:'^FTSE', N225:'^N225',
-    THYAO:'THYAO.IS', GARAN:'GARAN.IS', EREGL:'EREGL.IS', SISE:'SISE.IS',
-    KCHOL:'KCHOL.IS', AKBNK:'AKBNK.IS', BIMAS:'BIMAS.IS', ASELS:'ASELS.IS',
-    TUPRS:'TUPRS.IS', PGSUS:'PGSUS.IS', YKBNK:'YKBNK.IS', FROTO:'FROTO.IS',
-    XU100:'^XU100.IS',
+  // Netlify Function üzerinden Twelve Data — BİST + Emtia + Endeks
+  const tdMap = {
+    XAUUSD:'XAU/USD', XAGUSD:'XAG/USD', USOIL:'BCO/USD', NATGAS:'NATGAS/USD',
+    COPPER:'XCU/USD', PLAT:'XPT/USD', WHEAT:'WHEAT/USD', CORN:'CORN/USD',
+    SP500:'SPX', NDX:'IXIC', DJIA:'DJI', DAX:'GDAXI', FTSE:'FTSE', N225:'NI225',
+    THYAO:'THYAO:BIST', GARAN:'GARAN:BIST', EREGL:'EREGL:BIST', SISE:'SISE:BIST',
+    KCHOL:'KCHOL:BIST', AKBNK:'AKBNK:BIST', BIMAS:'BIMAS:BIST', ASELS:'ASELS:BIST',
+    TUPRS:'TUPRS:BIST', PGSUS:'PGSUS:BIST', YKBNK:'YKBNK:BIST', FROTO:'FROTO:BIST',
   };
-  const reverseMap = Object.fromEntries(Object.entries(yahooMap).map(([k,v])=>[v,k]));
-  const syms = Object.values(yahooMap).map(s=>encodeURIComponent(s)).join(',');
+  const reverseMap = Object.fromEntries(Object.entries(tdMap).map(([k,v])=>[v,k]));
 
-  // Yahoo Finance v8/spark — bazen CORS'suz çalışır
-  const endpoints = [
-    `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${syms}&range=1d&interval=5m`,
-    `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${syms}&range=1d&interval=5m`,
-  ];
+  try{
+    const res = await fetch('/.netlify/functions/prices', {signal: AbortSignal.timeout(15000)});
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const quotes = json?.quoteResponse?.result || [];
 
-  let quotes = [];
-
-  for(const url of endpoints){
-    try{
-      const res = await fetch(url, {
-        signal: AbortSignal.timeout(12000),
-        headers: {'Accept':'application/json'}
-      });
-      if(!res.ok) continue;
-      const data = await res.json();
-      const sparkResults = data?.spark?.result || [];
-      for(const item of sparkResults){
-        if(!item) continue;
-        const meta = item.response?.[0]?.meta;
-        if(!meta?.regularMarketPrice) continue;
-        const prev = meta.previousClose || meta.chartPreviousClose || meta.regularMarketPrice;
-        quotes.push({
-          symbol: item.symbol,
-          regularMarketPrice: meta.regularMarketPrice,
-          regularMarketPreviousClose: prev,
-          regularMarketChangePercent: ((meta.regularMarketPrice - prev) / prev * 100),
-          regularMarketDayHigh: meta.regularMarketDayHigh,
-          regularMarketDayLow: meta.regularMarketDayLow,
-        });
+    let ok = 0;
+    for(const q of quotes){
+      const sym = reverseMap[q.symbol];
+      if(!sym || !prices[sym]) continue;
+      const price = q.regularMarketPrice;
+      if(!price) continue;
+      const prev = q.regularMarketPreviousClose || price;
+      const d = prices[sym];
+      d.prev=d.price; d.price=price;
+      d.chg=q.regularMarketChangePercent ?? ((price-prev)/prev*100);
+      d.high=q.regularMarketDayHigh || Math.max(d.high,price);
+      d.low=q.regularMarketDayLow  || Math.min(d.low, price);
+      d.live=true; ok++;
+      const hist=priceHistory[sym];
+      if(hist){
+        const last=hist[hist.length-1];
+        if(Date.now()-last.t>60000){
+          hist.push({t:Date.now(),o:last.c,h:d.high,l:d.low,c:price});
+          if(hist.length>100) hist.shift();
+        } else { last.c=price; last.h=Math.max(last.h,price); last.l=Math.min(last.l,price); }
       }
-      if(quotes.length > 0) break;
-    } catch(e){ continue; }
-  }
-
-  // Fallback: v7/quote endpoint
-  if(quotes.length === 0){
-    try{
-      const url = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${syms}`;
-      const res = await fetch(url, {signal: AbortSignal.timeout(12000), headers:{'Accept':'application/json'}});
-      if(res.ok){
-        const data = await res.json();
-        quotes = data?.quoteResponse?.result || [];
-      }
-    } catch(e){}
-  }
-
-  let ok = 0;
-  for(const q of quotes){
-    const rawSym = decodeURIComponent(q.symbol||'');
-    const sym = reverseMap[rawSym] || reverseMap[rawSym.replace('%5E','^')];
-    if(!sym || !prices[sym]) continue;
-    const price = q.regularMarketPrice;
-    if(!price) continue;
-    const prev = q.regularMarketPreviousClose || price;
-    const d = prices[sym];
-    d.prev=d.price; d.price=price;
-    d.chg=q.regularMarketChangePercent ?? ((price-prev)/prev*100);
-    d.high=q.regularMarketDayHigh || Math.max(d.high,price);
-    d.low=q.regularMarketDayLow  || Math.min(d.low, price);
-    d.live=true; ok++;
-    const hist=priceHistory[sym];
-    if(hist){
-      const last=hist[hist.length-1];
-      if(Date.now()-last.t>60000){
-        hist.push({t:Date.now(),o:last.c,h:d.high,l:d.low,c:price});
-        if(hist.length>100) hist.shift();
-      } else { last.c=price; last.h=Math.max(last.h,price); last.l=Math.min(last.l,price); }
     }
-  }
 
-  if(ok>0){
-    console.log(`Emtia+Endeks+BİST: ${ok} sembol güncellendi`);
-    setLiveStatus('finnhub','ok', ok);
-    if(selMkt==='emtia'||selMkt==='endeks'||selMkt==='bist') updateUI();
-  } else {
-    console.warn('Yahoo Finance: veri gelmedi (CORS engeli olabilir)');
+    if(ok>0){
+      console.log(`Emtia+Endeks+BİST: ${ok} sembol güncellendi`);
+      setLiveStatus('finnhub','ok', ok);
+      if(selMkt==='emtia'||selMkt==='endeks'||selMkt==='bist') updateUI();
+    } else {
+      console.warn('Twelve Data: sembol eşleşmedi');
+    }
+  } catch(e){
+    console.warn('Twelve Data function:', e.message);
   }
 }
 
