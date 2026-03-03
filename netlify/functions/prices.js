@@ -6,18 +6,29 @@ exports.handler = async function(event) {
 
   const API_KEY = '2871537200c74ee5802841f011087c54';
 
-  // Önce sadece 2 sembol test edelim
-  const symbols = 'XAU/USD,THYAO:BIST,SPX';
+  const symbols = [
+    'XAU/USD','XAG/USD','BCO/USD','NATGAS/USD',
+    'XCU/USD','XPT/USD','WHEAT/USD','CORN/USD',
+    'THYAO:BIST','GARAN:BIST','EREGL:BIST','SISE:BIST',
+    'KCHOL:BIST','AKBNK:BIST','BIMAS:BIST','ASELS:BIST',
+    'TUPRS:BIST','PGSUS:BIST','YKBNK:BIST','FROTO:BIST',
+  ].join(',');
 
   try {
     const r = await fetch(
       `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbols)}&apikey=${API_KEY}`,
       { headers: { 'User-Agent': 'Mozilla/5.0' } }
     );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
-    // Ham veriyi direkt döndür — ne geliyor görelim
-    return { statusCode: 200, headers, body: JSON.stringify(data) };
-  } catch (e) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
-  }
-};
+
+    const result = [];
+    for (const [sym, q] of Object.entries(data)) {
+      if (!q || q.status === 'error' || q.code === 403 || !q.close) continue;
+      const price = parseFloat(q.close);
+      const prev  = parseFloat(q.previous_close) || price;
+      result.push({
+        symbol: sym,
+        regularMarketPrice: price,
+        regularMarketPreviousClose: prev,
+        regularMarketChangePercent: parseFloat(q.percent_change) || ((price-prev)/prev*100),
