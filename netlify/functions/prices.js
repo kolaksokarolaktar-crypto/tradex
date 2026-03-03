@@ -9,55 +9,42 @@ exports.handler = async function(event) {
     return { statusCode: 200, headers, body: '' };
   }
 
-  const symbols = [
-    'GC=F','SI=F','BZ=F','NG=F','HG=F','PL=F','ZW=F','ZC=F',
-    '^GSPC','^NDX','^DJI','^GDAXI','^FTSE','^N225',
-    'THYAO.IS','GARAN.IS','EREGL.IS','SISE.IS','KCHOL.IS','AKBNK.IS',
-    'BIMAS.IS','ASELS.IS','TUPRS.IS','PGSUS.IS','YKBNK.IS','FROTO.IS',
-    '^XU100.IS'
-  ].map(s => encodeURIComponent(s)).join(',');
+  const API_KEY = '2871537200c74ee5802841f011087c54';
 
-  const url = `https://query2.finance.yahoo.com/v8/finance/spark?symbols=${symbols}&range=1d&interval=5m`;
+  const symbols = [
+    'XAU/USD','XAG/USD','BCO/USD','NATGAS/USD',
+    'XCU/USD','XPT/USD','WHEAT/USD','CORN/USD',
+    'SPX','IXIC','DJI','GDAXI','FTSE','NI225',
+    'THYAO:BIST','GARAN:BIST','EREGL:BIST','SISE:BIST',
+    'KCHOL:BIST','AKBNK:BIST','BIMAS:BIST','ASELS:BIST',
+    'TUPRS:BIST','PGSUS:BIST','YKBNK:BIST','FROTO:BIST',
+  ].join(',');
 
   try {
-    const r = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible)' }
-    });
-
-    if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
-
+    const r = await fetch(
+      `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbols)}&apikey=${API_KEY}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
-    const result = [];
 
-    for (const item of (data?.spark?.result || [])) {
-      if (!item) continue;
-      const meta = item.response?.[0]?.meta;
-      if (!meta?.regularMarketPrice) continue;
-      const prev = meta.previousClose || meta.chartPreviousClose || meta.regularMarketPrice;
+    const result = [];
+    for (const [sym, q] of Object.entries(data)) {
+      if (!q || q.status === 'error' || !q.close) continue;
+      const price = parseFloat(q.close);
+      const prev  = parseFloat(q.previous_close) || price;
       result.push({
-        symbol: item.symbol,
-        regularMarketPrice: meta.regularMarketPrice,
+        symbol: sym,
+        regularMarketPrice: price,
         regularMarketPreviousClose: prev,
-        regularMarketChangePercent: ((meta.regularMarketPrice - prev) / prev * 100),
-        regularMarketDayHigh: meta.regularMarketDayHigh || meta.regularMarketPrice,
-        regularMarketDayLow: meta.regularMarketDayLow || meta.regularMarketPrice,
+        regularMarketChangePercent: parseFloat(q.percent_change) || ((price-prev)/prev*100),
+        regularMarketDayHigh: parseFloat(q.high) || price,
+        regularMarketDayLow:  parseFloat(q.low)  || price,
       });
     }
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ quoteResponse: { result } })
-    };
-
+    return { statusCode: 200, headers, body: JSON.stringify({ quoteResponse: { result } }) };
   } catch (e) {
-    try {
-      const url2 = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
-      const r2 = await fetch(url2, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const data2 = await r2.json();
-      return { statusCode: 200, headers, body: JSON.stringify(data2) };
-    } catch (e2) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
-    }
+    return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
   }
 };
