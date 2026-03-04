@@ -6,13 +6,16 @@ exports.handler = async function(event) {
 
   const API_KEY = '2871537200c74ee5802841f011087c54';
 
-  const symbols = [
-    'XAU/USD','XAG/USD','BCO/USD','NATGAS/USD',
-    'XCU/USD','XPT/USD','WHEAT/USD','CORN/USD',
-    'THYAO:BIST','GARAN:BIST','EREGL:BIST','SISE:BIST',
-    'KCHOL:BIST','AKBNK:BIST','BIMAS:BIST','ASELS:BIST',
-    'TUPRS:BIST','PGSUS:BIST','YKBNK:BIST','FROTO:BIST',
-  ].join(',');
+  // Dakikada 8 istek limiti — her seferinde farklı grup çek
+  const groups = [
+    ['XAU/USD','XAG/USD','BCO/USD','NATGAS/USD','XCU/USD','XPT/USD','WHEAT/USD','CORN/USD'],
+    ['THYAO:BIST','GARAN:BIST','EREGL:BIST','SISE:BIST','KCHOL:BIST','AKBNK:BIST','BIMAS:BIST','ASELS:BIST'],
+    ['TUPRS:BIST','PGSUS:BIST','YKBNK:BIST','FROTO:BIST'],
+  ];
+
+  // Hangi grup? Dakikaya göre sırayla
+  const groupIndex = Math.floor(Date.now() / 60000) % groups.length;
+  const symbols = groups[groupIndex].join(',');
 
   try {
     const r = await fetch(
@@ -23,7 +26,7 @@ exports.handler = async function(event) {
 
     const result = [];
     for (const [sym, q] of Object.entries(data)) {
-      if (!q || q.code === 403 || q.status === 'error' || !q.close) continue;
+      if (!q || q.code === 403 || q.code === 429 || q.status === 'error' || !q.close) continue;
       const price = parseFloat(q.close);
       const prev = parseFloat(q.previous_close) || price;
       result.push({
