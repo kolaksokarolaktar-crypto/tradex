@@ -10,7 +10,7 @@
   --bg:#080b10;--bg2:#0d1117;--bg3:#131a22;--bg4:#192030;
   --border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.11);
   --text:#dde2ec;--text2:#7e8fa3;--text3:#404f61;
-  --green:#00d68f;--green2:rgba(0,214,143,0.1);
+  --green:#00d68f;--green2:rgba(7, 12, 10, 0.1);
   --red:#f0445a;--red2:rgba(240,68,90,0.1);
   --yellow:#f0b429;--blue:#4a9eff;--purple:#8b6fff;
   --accent:#7c5cfc;--accent2:rgba(124,92,252,0.14);
@@ -1098,7 +1098,7 @@ async function fetchMetals(){
   const reverseMap = Object.fromEntries(Object.entries(tdMap).map(([k,v])=>[v,k]));
 
   try{
-    const res = await fetch('/.netlify/functions/prices', {signal: AbortSignal.timeout(15000)});
+    const res = await fetch('/prices', {signal: AbortSignal.timeout(15000)});
     if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     const quotes = json?.quoteResponse?.result || [];
