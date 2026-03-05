@@ -757,7 +757,7 @@ function goToPlatform(){
     if(!email || !pass){ showModalError('E-posta ve şifre giriniz.'); return; }
     // Kimlik bilgisini platform için sakla
     try{ localStorage.setItem('tx_pending_login', JSON.stringify({email, pass})); }catch(e){}
-    window.location.href = 'tradex-pro-v18.html';
+    window.location.href = 'tradex-pro-v17.html';
   } else {
     // Kayıt formu
     const fname = document.querySelector('#registerForm input[placeholder="Adınız"]').value.trim();
@@ -770,7 +770,7 @@ function goToPlatform(){
     if(pass.length < 6){ showModalError('Şifre en az 6 karakter olmalıdır.'); return; }
     // Yeni kullanıcı kaydı için bilgileri sakla
     try{ localStorage.setItem('tx_pending_register', JSON.stringify({name: fname+' '+lname, email, pass})); }catch(e){}
-    window.location.href = 'tradex-pro-v18.html';
+    window.location.href = 'tradex-pro-v17.html';
   }
 }
 
